@@ -872,11 +872,11 @@
         const CONFIG = {
             // Prefer the PHP endpoint; fall back to raw CSV.
             // Use relative paths so the page works from any origin.
-            dataUrls:   ['temps.php', 'temps.csv'],
+            dataUrls: ['temps.php', 'temps.csv'],
             // Timezone the server writes timestamps in (no TZ info in the CSV).
-            sourceTZ:   'America/Los_Angeles',
+            sourceTZ: 'America/Los_Angeles',
             // Default display timezone shown in the UI.
-            defaultTZ:  'America/Chicago',
+            defaultTZ: 'America/Chicago',
         };
         // ── End config ───────────────────────────────────────────────────────
 
@@ -1509,7 +1509,7 @@
                         drop: dev
                     };
                 })
-                .filter(ev => ev.drop >= minDevThreshold && ev.durationSec >= MIN_EVENT_SEC);
+                .filter(ev => ev.durationSec >= MIN_EVENT_SEC);
         }
 
         function detectEvents(data, minDevThreshold, mergeGapSec, gapMs = null) {
