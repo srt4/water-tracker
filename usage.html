@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Usage Log</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg: #f5f6f8;
+            --surface: #ffffff;
+            --surface-2: #f0f1f4;
+            --border: #e0e3ea;
+            --text: #4a5068;
+            --text-dim: #8b92a8;
+            --text-bright: #1a1f2e;
+            --blue: #3b82f6;
+            --blue-dim: rgba(59, 130, 246, 0.06);
+            --blue-glow: rgba(59, 130, 246, 0.12);
+            --cyan: #0891b2;
+            --red: #dc2626;
+            --green: #16a34a;
+            --amber: #d97706;
+            --water-bg: rgba(8, 145, 178, 0.12);
+            --water-stripe: rgba(8, 145, 178, 0.25);
+            --chart-grid: #e8eaef;
+            --chart-axis: #d0d4de;
+            --chart-ambient: rgba(220, 80, 80, 0.3);
+            --chart-pipe: #3b82f6;
+        }
+
+        :root.dark {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-2: #334155;
+            --border: #334155;
+            --text: #94a3b8;
+            --text-dim: #64748b;
+            --text-bright: #f1f5f9;
+            --blue-dim: rgba(59, 130, 246, 0.1);
+            --blue-glow: rgba(59, 130, 246, 0.2);
+            --chart-grid: #1e293b;
+            --chart-axis: #334155;
+            --chart-ambient: rgba(255, 82, 82, 0.82);
+            --chart-pipe: #38bdf8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        @media (min-width: 640px) {
+            .container {
+                padding: 3rem 1.5rem;
+            }
+        }
+
+        header {
+            margin-bottom: 2.5rem;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-bright);
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            color: var(--text-dim);
+            font-size: 0.875rem;
+            margin-top: 0.35rem;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 640px) {
+            .stats-row {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        .stat {
+            background: var(--surface);
+            padding: 1rem 1rem;
+        }
+
+        @media (min-width: 640px) {
+            .stat {
+                padding: 1.25rem 1.5rem;
+            }
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            font-weight: 500;
+            margin-bottom: 0.35rem;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .stat-value .unit {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-weight: 400;
+            margin-left: 0.15rem;
+        }
+
+        /* Mini chart */
+        .chart-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .chart-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        .chart-legend span::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            margin-right: 0.35rem;
+            vertical-align: middle;
+        }
+
+        .legend-pipe::before {
+            background: var(--blue);
+        }
+
+        .legend-ambient::before {
+            background: rgba(220, 80, 80, 0.4);
+        }
+
+        .legend-low::before {
+            background: #22c55e;
+        }
+
+        .legend-high::before {
+            background: #ef4444;
+        }
+
+        #chart-canvas {
+            width: 100%;
+            height: 160px;
+            display: block;
+            touch-action: none;
+        }
+
+        #chart-canvas.zooming {
+            cursor: crosshair;
+        }
+
+        .time-range-btns {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .chart-controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.35rem;
+        }
+
+        .time-range-btns button {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            padding: 0.3rem 0.65rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .range-days-select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            padding: 0.3rem 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+            min-width: 3.8rem;
+            outline: none;
+        }
+
+        .time-range-btns button:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .range-days-select:hover,
+        .range-days-select:focus {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .time-range-btns button.active {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: #fff;
+        }
+
+        .range-days-select.active {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: #fff;
+        }
+
+        .zoom-reset-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 500;
+            padding: 0.28rem 0.6rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .zoom-reset-btn:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .zoom-reset-btn.hidden {
+            display: none;
+        }
+
+        .chart-zoom-hint {
+            text-align: right;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-bottom: 0.35rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Table */
+        .table-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .event-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            background: var(--surface-2);
+            padding: 0.25rem 0.6rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            font-weight: 500;
+            text-align: left;
+            padding: 0.6rem 0.75rem;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+        }
+
+        thead th:last-child {
+            text-align: right;
+        }
+
+        thead th:nth-child(3) {
+            text-align: right;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: var(--blue-dim);
+        }
+
+        td {
+            padding: 0.55rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        td:first-child {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            width: 2rem;
+            padding-right: 0.25rem;
+        }
+
+        .time-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--text-bright);
+            white-space: nowrap;
+        }
+
+        .duration-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            text-align: right;
+        }
+
+        .drop-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            text-align: right;
+            color: var(--cyan);
+            white-space: nowrap;
+            width: 4ch;
+        }
+
+        .dur-short {
+            color: var(--green);
+        }
+
+        .dur-medium {
+            color: var(--amber);
+        }
+
+        .dur-long {
+            color: var(--red);
+        }
+
+        .bar-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .dur-text {
+            min-width: 8ch;
+            width: 8ch;
+            text-align: right;
+            display: inline-block;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .bar {
+            height: 4px;
+            border-radius: 2px;
+            background: var(--blue);
+            opacity: 0.5;
+            min-width: 2px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .loading::after {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--blue);
+            border-radius: 50%;
+            margin-left: 0.75rem;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .stats-row,
+        .chart-section,
+        .table-section {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            padding: 2rem 1.5rem;
+            color: var(--red);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        .empty-state {
+            padding: 3rem 1.5rem;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .scroll-wrap {
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .scroll-wrap::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scroll-wrap::-webkit-scrollbar-track {
+            background: var(--surface);
+        }
+
+        .scroll-wrap::-webkit-scrollbar-thumb {
+            background: #ccd0da;
+            border-radius: 3px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .control-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 500;
+        }
+
+        .threshold-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--border);
+            outline: none;
+        }
+
+        .threshold-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--blue);
+            cursor: pointer;
+            border: 2px solid var(--surface);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+
+        .threshold-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--blue);
+            min-width: 5ch;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .preset-select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.25rem 0.45rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text-bright);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .preset-select:focus {
+            border-color: var(--blue);
+        }
+
+        .spacer {
+            flex: 1;
+            min-width: 1rem;
+        }
+
+        .tz-select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--surface);
+            color: var(--text-bright);
+            cursor: pointer;
+            outline: none;
+        }
+
+        .tz-select:focus {
+            border-color: var(--blue);
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .tz-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-right: 0.4rem;
+        }
+
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-left: 0.6rem;
+            vertical-align: middle;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #9ca3af;
+        }
+
+        .live-badge.is-live .live-dot {
+            background: #22c55e;
+            box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .water-status {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            font-size: 0.95rem;
+        }
+
+        .water-status .status-line {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .water-status .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .water-status.in-use .status-dot {
+            background: #3b82f6;
+            box-shadow: 0 0 6px rgba(59, 130, 246, 0.5);
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
+        .water-status.recent .status-dot {
+            background: #f59e0b;
+        }
+
+        .water-status.idle .status-dot {
+            background: #22c55e;
+        }
+
+        .water-status .status-label {
+            font-weight: 600;
+        }
+
+        .water-status .status-ago {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+
+        .water-status .status-temps {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .page-footer {
+            text-align: center;
+            padding: 1.2rem 0 1.5rem;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.02em;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            margin-right: 0.75rem;
+            transition: all 0.15s;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .theme-toggle svg {
+            width: 14px;
+            height: 14px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        :root.dark .sun-icon {
+            display: block;
+        }
+
+        :root.dark .moon-icon {
+            display: none;
+        }
+
+        :root:not(.dark) .sun-icon {
+            display: none;
+        }
+
+        :root:not(.dark) .moon-icon {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header class="header-row">
+            <div>
+                <h1>Water Usage Log <span class="live-badge" id="live-badge"><span class="live-dot"></span><span
+                            id="live-text">--</span></span></h1>
+                <p>Detected from pipe temperature drops &middot; <span id="date-range"></span></p>
+            </div>
+            <div style="display:flex;align-items:center;margin-top:0.3rem;">
+                <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">
+                    <svg class="sun-icon" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" viewBox="0 0 24 24">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                <span class="tz-label">Display TZ</span>
+                <select class="tz-select" id="tz-select">
+                    <option value="America/New_York">Eastern</option>
+                    <option value="America/Chicago" selected>Central</option>
+                    <option value="America/Denver">Mountain</option>
+                    <option value="America/Los_Angeles">Pacific</option>
+                    <option value="UTC">UTC</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="stats-row" id="stats-row">
+            <div class="stat">
+                <div class="stat-label">Events detected</div>
+                <div class="stat-value" id="stat-events">--</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Total usage time</div>
+                <div class="stat-value" id="stat-total">--</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Average duration</div>
+                <div class="stat-value" id="stat-avg">--</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Water status</div>
+                <div class="stat-value" id="stat-status">--</div>
+            </div>
+        </div>
+
+        <div class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">Pipe Temperature &amp; Detected Usage</span>
+                <div class="chart-legend">
+                    <span class="legend-pipe">Pipe temp</span>
+                    <span class="legend-ambient">Air temp</span>
+                    <span class="legend-low">&lt;5m</span>
+                    <span class="legend-high">&gt;15m</span>
+                </div>
+            </div>
+            <div class="chart-controls-row">
+                <div class="time-range-btns" id="range-btns">
+                    <button data-hours="3">3H</button>
+                    <button data-hours="24" class="active">24H</button>
+                    <select id="days-range-select" class="range-days-select" aria-label="Day range"></select>
+                    <button data-hours="0">All</button>
+                </div>
+                <button id="zoom-reset-btn" class="zoom-reset-btn hidden" type="button">Reset zoom</button>
+            </div>
+            <div class="chart-zoom-hint">Drag on chart to zoom</div>
+            <canvas id="chart-canvas"></canvas>
+        </div>
+
+        <div class="table-section">
+            <div class="table-header">
+                <span class="table-title">Usage Events</span>
+                <span class="event-count" id="event-count">loading...</span>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <span class="control-label">Min dev</span>
+                    <input type="range" class="threshold-slider" id="drop-slider" min="0.01" max="0.40" step="0.01"
+                        value="0.20">
+                    <span class="threshold-value" id="drop-value">0.2°C</span>
+                </div>
+                <span class="spacer"></span>
+                <div class="control-group">
+                    <span class="control-label">Merge gap</span>
+                    <input type="range" class="threshold-slider" id="merge-slider" min="60" max="600" step="30"
+                        value="180">
+                    <span class="threshold-value" id="merge-value">3m</span>
+                </div>
+                <div class="control-group">
+                    <span class="control-label">Behavior</span>
+                    <select id="algo-preset" class="preset-select">
+                        <option value="aggressive" selected>Aggressive</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="conservative">Conservative</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="table-body">
+                <div class="loading">Fetching temperature data</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-footer" id="page-footer"></div>
+
+    <script>
+        // ── Deployment config ────────────────────────────────────────────────
+        const CONFIG = {
+            // Prefer the PHP endpoint; fall back to raw CSV.
+            // Use relative paths so the page works from any origin.
+            dataUrls:   ['temps.php', 'temps.csv'],
+            // Timezone the server writes timestamps in (no TZ info in the CSV).
+            sourceTZ:   'America/Los_Angeles',
+            // Default display timezone shown in the UI.
+            defaultTZ:  'America/Chicago',
+        };
+        // ── End config ───────────────────────────────────────────────────────
+
+        const CSV_URLS = CONFIG.dataUrls;
+
+        let rawData = [];
+        let filteredData = [];
+        let currentEvents = [];
+        let currentRangeHours = 24;
+        let displayTZ = CONFIG.defaultTZ;
+        let currentGapMs = 60000; // updated per range; used to break lines + events on missing data
+        let algoPreset = 'aggressive';
+        let zoomRangeMs = null; // { startMs, endMs } from drag-zoom on chart
+        let chartViewport = null; // set by renderChart for zoom mapping
+        let dragZoom = null; // { pointerId, startX, currentX }
+        let backfillPromise = null;
+        let lastBackfillAttemptMs = 0;
+        let hardResyncPromise = null;
+        let lastServerStatsCheckMs = 0;
+        const DAY_RANGE_OPTIONS = [5, 10, 20, 60];
+        const DEFAULT_DAY_RANGE_DAYS = 5;
+
+        // The CSV timestamps are stored in SOURCE_TZ (no TZ info in the string).
+        // We parse them as that timezone regardless of the browser's local timezone.
+        const SOURCE_TZ = CONFIG.sourceTZ;
+        const DATA_CACHE_KEY = 'water-tracker-data-v1';
+        // Cache as much history as the browser allows (adaptive to quota limits).
+        const CACHE_TARGET_MAX_ROWS = 150000;
+        const CACHE_MIN_ROWS = 1000;
+        const REFRESH_BACKFILL_MS = 2 * 60 * 1000;
+        const BACKFILL_CHUNK_DAYS = 5;
+        const BACKFILL_MIN_INTERVAL_MS = 60 * 1000;
+        const SERVER_STATS_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+        const HARD_RESYNC_MIN_DIFF_ROWS = 400;
+        const HARD_RESYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+        const HARD_RESYNC_DAYS = 36500;
+        const HARD_RESYNC_MARKER_KEY = 'water-tracker-hard-resync-at-ms';
+
+        async function fetchData(opts = {}) {
+            const {
+                sinceMs = null,
+                beforeMs = null,
+                daysLimit = null,
+                suppressUiError = false
+            } = opts;
+            let lastErr = null;
+            const needsServerQuery = (sinceMs !== null || beforeMs !== null || daysLimit !== null);
+            for (const url of CSV_URLS) {
+                try {
+                    // Raw CSV fallback doesn't support query-based slicing.
+                    if (needsServerQuery && url.endsWith('.csv')) continue;
+
+                    let reqUrl = url;
+                    if (url.endsWith('temps.php')) {
+                        const params = new URLSearchParams();
+                        if (sinceMs !== null) params.set('since', String(Math.floor(Math.max(0, sinceMs) / 1000)));
+                        if (beforeMs !== null) params.set('before', String(Math.floor(Math.max(0, beforeMs) / 1000)));
+                        if (daysLimit !== null) params.set('days', String(daysLimit));
+                        const qs = params.toString();
+                        if (qs) reqUrl += (url.includes('?') ? '&' : '?') + qs;
+                    }
+
+                    const resp = await fetch(reqUrl, { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const text = await resp.text();
+                    const parsed = parseCSV(text);
+                    if (parsed.length > 0) return parsed;
+                    if (needsServerQuery) return [];
+                    throw new Error('No rows parsed');
+                } catch (e) {
+                    lastErr = e;
+                }
+            }
+            if (!suppressUiError) {
+                document.getElementById('table-body').innerHTML =
+                    `<div class="error">Failed to load data: ${lastErr ? lastErr.message : 'unknown error'}</div>`;
+            }
+            return [];
+        }
+
+        async function fetchServerStats() {
+            for (const url of CSV_URLS) {
+                if (!url.endsWith('temps.php')) continue;
+                try {
+                    const reqUrl = url + (url.includes('?') ? '&' : '?') + 'stats=1';
+                    const resp = await fetch(reqUrl, { cache: 'no-store' });
+                    if (!resp.ok) continue;
+                    const stats = await resp.json();
+                    const totalRows = Number(stats && stats.totalRows);
+                    if (!isFinite(totalRows) || totalRows < 0) continue;
+                    return {
+                        totalRows: Math.floor(totalRows),
+                        firstTimestamp: typeof stats.firstTimestamp === 'string' ? stats.firstTimestamp : null,
+                        lastTimestamp: typeof stats.lastTimestamp === 'string' ? stats.lastTimestamp : null
+                    };
+                } catch (_) {
+                    // Best-effort check only.
+                }
+            }
+            return null;
+        }
+
+        async function maybeHardResyncFromServerStats(force = false) {
+            if (!rawData || rawData.length < 2) return;
+            if (hardResyncPromise) return hardResyncPromise;
+
+            const nowMs = Date.now();
+            if (!force && nowMs - lastServerStatsCheckMs < SERVER_STATS_CHECK_INTERVAL_MS) return;
+            lastServerStatsCheckMs = nowMs;
+
+            const stats = await fetchServerStats();
+            if (!stats) return;
+
+            const serverRows = stats.totalRows;
+            const clientRows = rawData.length;
+            const rowGap = serverRows - clientRows;
+            if (rowGap < HARD_RESYNC_MIN_DIFF_ROWS) return;
+
+            const serverFirstDate = stats.firstTimestamp ? parseSourceTimestamp(stats.firstTimestamp) : null;
+            const serverFirstMs = serverFirstDate ? serverFirstDate.getTime() : NaN;
+            const clientFirstMs = rawData[0].ts.getTime();
+            const missingOlderHistory = isFinite(serverFirstMs) && (clientFirstMs - serverFirstMs) > 2 * 60 * 1000;
+            if (!missingOlderHistory) return;
+
+            let lastHardResyncMs = 0;
+            try {
+                lastHardResyncMs = Number(localStorage.getItem(HARD_RESYNC_MARKER_KEY)) || 0;
+            } catch (_) {
+                lastHardResyncMs = 0;
+            }
+            if (!force && nowMs - lastHardResyncMs < HARD_RESYNC_COOLDOWN_MS) return;
+
+            try {
+                localStorage.setItem(HARD_RESYNC_MARKER_KEY, String(nowMs));
+            } catch (_) {
+                // Ignore storage failures; hard resync still runs.
+            }
+
+            hardResyncPromise = (async () => {
+                const full = await fetchData({
+                    daysLimit: HARD_RESYNC_DAYS,
+                    suppressUiError: true
+                });
+                if (!full || full.length === 0) return;
+                if (full.length <= rawData.length) return;
+
+                rawData = full;
+                saveCachedData(rawData);
+                update();
+                updateLiveBadge();
+            })().finally(() => {
+                hardResyncPromise = null;
+            });
+
+            return hardResyncPromise;
+        }
+
+        function parseSourceTimestamp(str) {
+            // The CSV has naive timestamps (no timezone suffix) in Pacific time.
+            // Parse them as SOURCE_TZ regardless of browser locale.
+            const naive = new Date(str.replace(' ', 'T'));
+            if (isNaN(naive.getTime())) return null;
+
+            // Assume PST first (-8), then compute correction using SOURCE_TZ.
+            const guessUTC = new Date(naive.getTime() + 8 * 3600000); // assume PST
+            const srcStr = guessUTC.toLocaleString('en-US', { timeZone: SOURCE_TZ });
+            const srcParsed = new Date(srcStr);
+            const offsetMs = srcParsed.getTime() - naive.getTime();
+            return new Date(guessUTC.getTime() - offsetMs);
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].replace(/"/g, '');
+                const parts = line.split(',');
+                if (parts.length < 3) continue;
+                const ts = parseSourceTimestamp(parts[0].trim());
+                const t1 = parseFloat(parts[1]);
+                const t2 = parseFloat(parts[2]);
+                // Filter out anomalous readings: 85°C is the DS18B20 power-on default / error value.
+                // Also reject anything outside a reasonable range for indoor pipe temps.
+                if (ts && !isNaN(t1) && !isNaN(t2) && t1 < 60 && t1 > -10 && t2 < 60 && t2 > -10) {
+                    data.push({ ts, t1, t2 });
+                }
+            }
+            // Keep chronological order and drop duplicate timestamps.
+            data.sort((a, b) => a.ts - b.ts);
+            const deduped = [];
+            let lastTs = null;
+            for (const row of data) {
+                const t = row.ts.getTime();
+                if (t === lastTs) continue;
+                deduped.push(row);
+                lastTs = t;
+            }
+            return deduped;
+        }
+
+        function mergeSeriesByTs(existing, incoming) {
+            if (!existing || existing.length === 0) return incoming || [];
+            if (!incoming || incoming.length === 0) return existing;
+
+            const out = [];
+            let i = 0, j = 0;
+            while (i < existing.length && j < incoming.length) {
+                const ta = existing[i].ts.getTime();
+                const tb = incoming[j].ts.getTime();
+                if (ta < tb) {
+                    out.push(existing[i++]);
+                } else if (tb < ta) {
+                    out.push(incoming[j++]);
+                } else {
+                    // Incoming wins for identical timestamp.
+                    out.push(incoming[j]);
+                    i++;
+                    j++;
+                }
+            }
+            while (i < existing.length) out.push(existing[i++]);
+            while (j < incoming.length) out.push(incoming[j++]);
+            return out;
+        }
+
+        function loadCachedData() {
+            try {
+                const raw = localStorage.getItem(DATA_CACHE_KEY);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                if (!parsed || !Array.isArray(parsed.rows)) return [];
+
+                const rows = [];
+                for (const row of parsed.rows) {
+                    if (!Array.isArray(row) || row.length < 3) continue;
+                    const tsMs = Number(row[0]);
+                    const t1 = Number(row[1]);
+                    const t2 = Number(row[2]);
+                    if (!isFinite(tsMs) || !isFinite(t1) || !isFinite(t2)) continue;
+                    rows.push({ ts: new Date(tsMs), t1, t2 });
+                }
+                rows.sort((a, b) => a.ts - b.ts);
+                return rows;
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function isQuotaExceededError(err) {
+            if (!err) return false;
+            return (
+                err.name === 'QuotaExceededError' ||
+                err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+                err.code === 22 ||
+                err.code === 1014
+            );
+        }
+
+        function saveCachedData(data) {
+            if (!data || data.length === 0) return;
+
+            // Try storing the largest slice first, then back off if storage quota is hit.
+            let keep = Math.min(data.length, CACHE_TARGET_MAX_ROWS);
+            while (keep >= CACHE_MIN_ROWS) {
+                const rows = data.slice(data.length - keep);
+                const packed = rows.map(d => [d.ts.getTime(), +d.t1.toFixed(2), +d.t2.toFixed(2)]);
+                const payload = JSON.stringify({
+                    rows: packed,
+                    savedAtMs: Date.now(),
+                    rowCount: rows.length
+                });
+                try {
+                    localStorage.setItem(DATA_CACHE_KEY, payload);
+                    return;
+                } catch (e) {
+                    if (!isQuotaExceededError(e)) return;
+                    // Reduce by ~20% each attempt to converge quickly.
+                    keep = Math.floor(keep * 0.8);
+                }
+            }
+
+            // Last-resort tiny cache if storage is extremely constrained.
+            try {
+                const rows = data.slice(data.length - Math.min(data.length, CACHE_MIN_ROWS));
+                const packed = rows.map(d => [d.ts.getTime(), +d.t1.toFixed(2), +d.t2.toFixed(2)]);
+                localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+                    rows: packed,
+                    savedAtMs: Date.now(),
+                    rowCount: rows.length
+                }));
+            } catch (_) {
+                // Best-effort cache only; ignore quota/storage errors.
+            }
+        }
+
+        async function maybeBackfillOlderHistory() {
+            // Keep initial load instant from cache, then quietly stitch older data in chunks.
+            if (!rawData || rawData.length < 2) return;
+            if (backfillPromise) return;
+
+            const nowMs = Date.now();
+            if (nowMs - lastBackfillAttemptMs < BACKFILL_MIN_INTERVAL_MS) return;
+            lastBackfillAttemptMs = nowMs;
+
+            backfillPromise = (async () => {
+                const firstMs = rawData[0].ts.getTime();
+                if (!isFinite(firstMs) || firstMs <= 0) return;
+
+                const chunkMs = BACKFILL_CHUNK_DAYS * 24 * 3600 * 1000;
+                const sinceMs = Math.max(0, firstMs - chunkMs);
+                const beforeMs = Math.max(0, firstMs - 1000); // exclusive in temps.php
+                if (beforeMs <= sinceMs) return;
+
+                const older = await fetchData({
+                    sinceMs,
+                    beforeMs,
+                    suppressUiError: true
+                });
+                if (!older || older.length === 0) return;
+                if (older[0].ts.getTime() >= firstMs) return; // no older rows available
+
+                rawData = mergeSeriesByTs(rawData, older);
+                saveCachedData(rawData);
+                update();
+                updateLiveBadge();
+            })().finally(() => {
+                backfillPromise = null;
+            });
+
+            return backfillPromise;
+        }
+
+        // Calibration: treat "ambient at the pipe" as air temp minus this offset.
+        // (Helps when the air probe runs slightly warmer than the pipe's surrounding air.)
+        const AMBIENT_CALIB_C = 0.5;
+        // Thermal lag compensation: pipe temp changes trail actual valve activity.
+        const FLOW_LAG_MS = 30 * 1000;
+
+        function smoothArray(arr, windowSize) {
+            const half = Math.floor(windowSize / 2);
+            return arr.map((_, i) => {
+                let sum = 0, count = 0;
+                for (let j = Math.max(0, i - half); j <= Math.min(arr.length - 1, i + half); j++) {
+                    sum += arr[j];
+                    count++;
+                }
+                return sum / count;
+            });
+        }
+
+        function quantile(values, q) {
+            if (!values || values.length === 0) return NaN;
+            const sorted = [...values].sort((a, b) => a - b);
+            const pos = (sorted.length - 1) * q;
+            const lo = Math.floor(pos);
+            const hi = Math.ceil(pos);
+            if (lo === hi) return sorted[lo];
+            const t = pos - lo;
+            return sorted[lo] * (1 - t) + sorted[hi] * t;
+        }
+
+        function inferSampleSec(segment) {
+            const dts = [];
+            for (let i = 1; i < segment.length; i++) {
+                const dt = (segment[i].ts.getTime() - segment[i - 1].ts.getTime()) / 1000;
+                if (dt > 0 && dt < 300) dts.push(dt);
+            }
+            if (dts.length === 0) return 12;
+            // Clamp to a reasonable range so adaptive constants remain stable.
+            return Math.max(6, Math.min(30, quantile(dts, 0.5)));
+        }
+
+        function getBehaviorTuning(preset) {
+            switch (preset) {
+                case 'aggressive':
+                    return {
+                        startLookbackMul: 1.3,
+                        endConfirmMul: 0.5,
+                        minEventMul: 0.75,
+                        pipeMoveMul: 0.8,
+                        minRateMul: 0.8,
+                        minRiseMul: 0.8,
+                        plateauMul: 1.4,
+                        recoveryMul: 0.55
+                    };
+                case 'conservative':
+                    return {
+                        startLookbackMul: 1.15,
+                        endConfirmMul: 1.25,
+                        minEventMul: 1.35,
+                        pipeMoveMul: 1.2,
+                        minRateMul: 1.25,
+                        minRiseMul: 1.2,
+                        plateauMul: 0.9,
+                        recoveryMul: 1.3
+                    };
+                default:
+                    return {
+                        startLookbackMul: 1,
+                        endConfirmMul: 1,
+                        minEventMul: 1,
+                        pipeMoveMul: 1,
+                        minRateMul: 1,
+                        minRiseMul: 1,
+                        plateauMul: 1,
+                        recoveryMul: 1
+                    };
+            }
+        }
+
+        function inferGapThresholdMs(data) {
+            // Infer the sampling cadence and choose a "missing data" threshold.
+            // We consider gaps larger than ~5x the typical interval to be missing,
+            // and we never go below 60 seconds to avoid breaking on normal jitter.
+            if (!data || data.length < 4) return 60000;
+
+            const dts = [];
+            for (let i = 1; i < data.length; i++) {
+                const dt = data[i].ts.getTime() - data[i - 1].ts.getTime();
+                if (dt > 0 && dt < 5 * 60 * 1000) dts.push(dt);
+            }
+            if (dts.length < 8) return 60000;
+
+            dts.sort((a, b) => a - b);
+            const p95 = dts[Math.floor(0.95 * (dts.length - 1))];
+            return Math.max(60000, p95 * 5);
+        }
+
+        function forEachContinuousSegment(data, gapMs, fn) {
+            if (data.length === 0) return;
+            let start = 0;
+            for (let i = 1; i <= data.length; i++) {
+                const isEnd = i === data.length;
+                const isGap = !isEnd && (data[i].ts.getTime() - data[i - 1].ts.getTime() > gapMs);
+                if (isEnd || isGap) {
+                    fn(start, i); // [start, i)
+                    start = i;
+                }
+            }
+        }
+
+        function detectEventsContinuous(segment, minDevThreshold, mergeGapSec) {
+            if (segment.length < 10) return [];
+
+            // Adaptive timing based on actual sample cadence (handles interval changes).
+            const sampleSec = inferSampleSec(segment);
+            const tune = getBehaviorTuning(algoPreset);
+            const START_LOOKBACK = Math.max(8, Math.min(30, Math.round((150 / sampleSec) * tune.startLookbackMul))); // ~2.5 minutes
+            const END_CONFIRM = Math.max(5, Math.min(18, Math.round((90 / sampleSec) * tune.endConfirmMul)));        // ~1.5 minutes
+            const BASELINE_LOOKBACK = Math.max(16, Math.min(40, Math.round(240 / sampleSec)));
+            const MIN_EVENT_SEC = Math.max(24, sampleSec * 2 * tune.minEventMul);
+
+            // Adaptive guard rails for starts:
+            // - minDevThreshold still controls absolute sensitivity
+            // - rate/step guards reject slow drift and one-sample wiggles
+            const PIPE_MIN_MOVE = Math.max(0.10, Math.min(0.42, minDevThreshold * 0.75 * tune.pipeMoveMul));
+            const MIN_RATE_C_PER_MIN = Math.max(0.05, minDevThreshold * 0.35 * tune.minRateMul);
+            const MIN_RISE_C = Math.max(0.02, minDevThreshold * 0.20 * tune.minRiseMul);
+            const PLATEAU_BAND = Math.max(0.09, Math.min(0.24, minDevThreshold * 0.60 * tune.plateauMul));
+            const RECOVERY_STEP_C = Math.max(0.008, MIN_RISE_C * 0.35) * (tune.recoveryMul || 1);
+            const FLAT_STEP_C = RECOVERY_STEP_C * 0.6;
+            const INFLECT_STEP_C = Math.max(0.002, RECOVERY_STEP_C * 0.2);
+            const TREND_WINDOW = Math.max(10, Math.min(180, Math.round((30 * 60) / sampleSec))); // ~30 minutes
+            const RECOVERY_TREND_C = Math.max(0.02, minDevThreshold * 0.15) * (tune.recoveryMul || 1);
+
+            // Only detect when pipe is BELOW ambient (cold water flow).
+            // If pipe is at or above ambient, set gap to 0 — we don't want to trigger
+            // on the pipe slowly warming above air temp (it's in a warmer spot).
+            // Use a 0.5°C buffer above ambient for the "no detection" zone.
+            const ABOVE_AMBIENT_BUFFER = 0.5;
+            const gaps = segment.map(d => {
+                const ambientAdj = d.t1 - AMBIENT_CALIB_C;
+                const diff = ambientAdj - d.t2; // positive when pipe is cooler than ambient
+                // Only count deviation when pipe is cooler; ignore warming above ambient
+                return diff > -ABOVE_AMBIENT_BUFFER ? Math.max(0, diff) : 0;
+            });
+            const smoothed = smoothArray(gaps, 5);
+            const pipeSmoothed = smoothArray(segment.map(d => d.t2), 5);
+
+            const events = [];
+            let inEvent = false;
+            let startIdx = 0;
+            let peakGap = smoothed[0];
+            let peakGapIdx = 0;
+            let lastWideIdx = 0;
+            let narrowCount = 0;
+            let narrowStartIdx = -1; // first index where recovery (gap narrowing) begins
+            let recoveryStartIdx = -1; // first meaningful negative-slope index while in event
+            let inflectionStartIdx = -1; // earliest slight negative slope before confirmed recovery
+
+            for (let i = 1; i < smoothed.length; i++) {
+                const val = smoothed[i];
+
+                if (!inEvent) {
+                    // Find the minimum gap within the recent lookback window.
+                    // If the current gap is sufficiently above that minimum, the gap has widened
+                    // quickly enough to indicate water flow.
+                    const from = Math.max(0, i - START_LOOKBACK);
+                    const local = smoothed.slice(from, i + 1);
+                    const baselineGap = quantile(local, 0.2);
+                    let minIdx = from;
+                    for (let j = from; j <= i; j++) {
+                        if (smoothed[j] < smoothed[minIdx]) minIdx = j;
+                    }
+
+                    const inc = val - baselineGap;
+                    const dtMin = Math.max((segment[i].ts - segment[minIdx].ts) / 60000, 0.05);
+                    const awayRate = inc / dtMin;
+                    const stepRise = i > 0 ? (smoothed[i] - smoothed[i - 1]) : 0;
+                    const recentRise = val - smoothed[Math.max(from, i - 2)];
+                    const pipeMove = Math.abs(pipeSmoothed[i] - pipeSmoothed[minIdx]);
+                    if (
+                        inc >= minDevThreshold &&
+                        awayRate >= MIN_RATE_C_PER_MIN &&
+                        (stepRise >= MIN_RISE_C || recentRise >= MIN_RISE_C * 1.5) &&
+                        pipeMove >= PIPE_MIN_MOVE
+                    ) {
+                        inEvent = true;
+                        startIdx = Math.max(0, minIdx - 5);
+                        peakGap = val;
+                        peakGapIdx = i;
+                        lastWideIdx = i;
+                        narrowCount = 0;
+                        narrowStartIdx = -1;
+                        recoveryStartIdx = -1;
+                        inflectionStartIdx = -1;
+                    }
+                } else {
+                    const delta = val - smoothed[i - 1];
+                    if (val >= peakGap) {
+                        peakGap = val;
+                        peakGapIdx = i;
+                        lastWideIdx = i;
+                        narrowCount = 0;
+                        narrowStartIdx = -1;
+                        recoveryStartIdx = -1;
+                        inflectionStartIdx = -1;
+                    } else {
+                        const belowPlateau = val < (peakGap - PLATEAU_BAND);
+                        const trendIdx = Math.max(0, i - TREND_WINDOW);
+                        const trend = val - smoothed[trendIdx];
+                        const strongRecovery = delta <= -FLAT_STEP_C || trend <= -RECOVERY_TREND_C;
+
+                        // Negative slope (instant or trend) in below-plateau region is our inflection/recovery signal.
+                        if (belowPlateau && inflectionStartIdx < 0 && (delta <= -INFLECT_STEP_C || trend <= -(RECOVERY_TREND_C * 0.4))) {
+                            inflectionStartIdx = i;
+                        }
+                        if (belowPlateau && recoveryStartIdx < 0 && (delta <= -RECOVERY_STEP_C || trend <= -RECOVERY_TREND_C)) {
+                            recoveryStartIdx = i;
+                        }
+
+                        const recoveringNow = belowPlateau && strongRecovery;
+
+                        if (recoveringNow) {
+                            // Confirm stop only while recovery slope is sustained.
+                            if (narrowCount === 0) narrowStartIdx = i;
+                            narrowCount++;
+                        } else {
+                            // Sustained near-zero derivative (or re-widening) means usage is ongoing.
+                            // Do NOT progress stop confirmation on flat sections.
+                            lastWideIdx = i;
+                            if (narrowCount > 0) narrowCount = Math.max(0, narrowCount - 1);
+                            // Only clear anchors if we're back near peak (still actively flowing).
+                            if (!belowPlateau && narrowCount === 0) {
+                                narrowStartIdx = -1;
+                                recoveryStartIdx = -1;
+                                inflectionStartIdx = -1;
+                            }
+                        }
+                    }
+
+                    if (narrowCount >= END_CONFIRM) {
+                        const endIdx = Math.max(startIdx, peakGapIdx > startIdx ? peakGapIdx - 3 : lastWideIdx);
+                        events.push({ startIdx, endIdx, peakGap });
+                        inEvent = false;
+                        narrowCount = 0;
+                        narrowStartIdx = -1;
+                        recoveryStartIdx = -1;
+                        inflectionStartIdx = -1;
+                    }
+                }
+            }
+
+            if (inEvent) {
+                const tailEndIdx = Math.max(startIdx, peakGapIdx > startIdx ? peakGapIdx - 3 : lastWideIdx);
+                events.push({ startIdx, endIdx: tailEndIdx, peakGap });
+            }
+
+            // Merge events within mergeGapSec of each other (within this continuous segment)
+            const merged = [];
+            for (const ev of events) {
+                if (merged.length > 0) {
+                    const prev = merged[merged.length - 1];
+                    const gapSec = (segment[ev.startIdx].ts - segment[prev.endIdx].ts) / 1000;
+                    if (gapSec <= mergeGapSec) {
+                        prev.endIdx = ev.endIdx;
+                        prev.peakGap = Math.max(prev.peakGap, ev.peakGap);
+                        continue;
+                    }
+                }
+                merged.push({ ...ev });
+            }
+
+            // Build final event objects (no index yet; assigned globally later)
+            return merged
+                .map(ev => {
+                    const segStartMs = segment[0].ts.getTime();
+                    const rawStartMs = segment[ev.startIdx].ts.getTime();
+                    const rawEndMs = segment[ev.endIdx].ts.getTime();
+                    // Shift start earlier: water was flowing ~30s before the pipe cooled.
+                    // End stays at peak gap (coldest pipe temp) — that's when flow actually stopped.
+                    const startMs = Math.max(segStartMs, rawStartMs - FLOW_LAG_MS);
+                    const endMs = Math.max(startMs, rawEndMs);
+                    const startTime = new Date(startMs);
+                    const endTime = new Date(endMs);
+                    const durSec = Math.max((endMs - startMs) / 1000, 0);
+
+                    // Estimate the "resting" (pre-event) gap so the reported Δ°C is relative.
+                    const baselineStart = Math.max(0, ev.startIdx - BASELINE_LOOKBACK);
+                    const baselineWindow = smoothed.slice(baselineStart, ev.startIdx + 1);
+                    let baselineGap = quantile(baselineWindow, 0.25);
+                    if (!isFinite(baselineGap)) baselineGap = smoothed[ev.startIdx];
+
+                    const dev = Math.max(ev.peakGap - baselineGap, 0);
+
+                    return {
+                        startTime,
+                        endTime,
+                        durationSec: durSec,
+                        drop: dev
+                    };
+                })
+                .filter(ev => ev.drop >= minDevThreshold && ev.durationSec >= MIN_EVENT_SEC);
+        }
+
+        function detectEvents(data, minDevThreshold, mergeGapSec, gapMs = null) {
+            if (data.length < 10) return [];
+
+            const gMs = gapMs ?? inferGapThresholdMs(data);
+
+            // IMPORTANT: treat missing spans as "no usage".
+            // We split the data into continuous segments and run detection independently,
+            // so outages never get interpolated or counted as part of a usage event.
+            const all = [];
+            forEachContinuousSegment(data, gMs, (s, e) => {
+                const segment = data.slice(s, e);
+                if (segment.length < 10) return;
+                all.push(...detectEventsContinuous(segment, minDevThreshold, mergeGapSec));
+            });
+
+            return all.map((ev, i) => ({ ...ev, index: i + 1 }));
+        }
+
+        function formatTime(d) {
+            return d.toLocaleTimeString('en-US', { timeZone: displayTZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        }
+
+        function formatDate(d) {
+            return d.toLocaleDateString('en-US', { timeZone: displayTZ, month: 'short', day: 'numeric' });
+        }
+
+        function formatC(v) {
+            if (!isFinite(v)) return '--';
+            if (Math.abs(v) < 1) return v.toFixed(2).replace(/\.?0+$/, '');
+            return v.toFixed(1).replace(/\.0$/, '');
+        }
+
+        function formatDuration(sec) {
+            if (sec < 60) return `${Math.round(sec)}s`;
+            const m = Math.floor(sec / 60);
+            const s = Math.round(sec % 60);
+            if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+            const h = Math.floor(m / 60);
+            const rm = m % 60;
+            return `${h}h ${rm}m`;
+        }
+
+        function durClass(sec) {
+            if (sec < 600) return 'dur-short';   // 0–10 min
+            if (sec < 1800) return 'dur-medium'; // 10–30 min
+            return 'dur-long';                   // 30+ min
+        }
+
+        function renderStats(events, statusEvents = events) {
+            document.getElementById('stat-events').textContent = events.length;
+
+            const totalSec = events.reduce((s, e) => s + e.durationSec, 0);
+            document.getElementById('stat-total').innerHTML = formatDuration(totalSec);
+
+            const avgSec = events.length > 0 ? totalSec / events.length : 0;
+            document.getElementById('stat-avg').innerHTML = formatDuration(avgSec);
+
+            // Water status: check if the latest data point falls within an active event
+            const el = document.getElementById('stat-status');
+            if (rawData.length > 0) {
+                const latest = rawData[rawData.length - 1];
+                const latestMs = latest.ts.getTime();
+                const flowing = statusEvents.some(ev => latestMs >= ev.startTime.getTime() && latestMs <= ev.endTime.getTime());
+
+                const temps = `<span style="color:#3b82f6">${latest.t2.toFixed(1)}°</span>` +
+                    `<span style="color:var(--text-dim)"> / </span>` +
+                    `<span style="color:rgba(200,60,60,0.6)">${latest.t1.toFixed(1)}°</span>`;
+
+                if (flowing) {
+                    el.innerHTML = `<div class="water-status in-use">` +
+                        `<div class="status-line">` +
+                        `<span class="status-dot"></span>` +
+                        `<span class="status-label" style="color:#3b82f6">In-Use</span>` +
+                        `</div>` +
+                        `<div class="status-temps">${temps}</div>` +
+                        `</div>`;
+                } else {
+                    const twoHoursMs = 2 * 60 * 60 * 1000;
+                    const recentEvent = statusEvents
+                        .filter(ev => (latestMs - ev.endTime.getTime()) > 0 && (latestMs - ev.endTime.getTime()) <= twoHoursMs)
+                        .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())[0];
+                    if (recentEvent) {
+                        const agoMin = Math.round((latestMs - recentEvent.endTime.getTime()) / 60000);
+                        const agoText = agoMin < 1 ? 'just now' : agoMin + 'm ago';
+                        el.innerHTML = `<div class="water-status recent">` +
+                            `<div class="status-line">` +
+                            `<span class="status-dot"></span>` +
+                            `<span class="status-label" style="color:#f59e0b">Recent</span>` +
+                            `<span class="status-ago">${agoText}</span>` +
+                            `</div>` +
+                            `<div class="status-temps">${temps}</div>` +
+                            `</div>`;
+                    } else {
+                        el.innerHTML = `<div class="water-status idle">` +
+                            `<div class="status-line">` +
+                            `<span class="status-dot"></span>` +
+                            `<span class="status-label" style="color:#22c55e">Idle</span>` +
+                            `</div>` +
+                            `<div class="status-temps">${temps}</div>` +
+                            `</div>`;
+                    }
+                }
+            } else {
+                el.innerHTML = '<span style="font-size:0.85rem;color:var(--text-dim)">No data</span>';
+            }
+        }
+
+        function renderTable(events) {
+            const container = document.getElementById('table-body');
+            document.getElementById('event-count').textContent = `${events.length} events`;
+
+            if (events.length === 0) {
+                container.innerHTML = '<div class="empty-state">No water usage events detected</div>';
+                return;
+            }
+
+            const maxDur = Math.max(...events.map(e => e.durationSec));
+
+            let html = '<div class="scroll-wrap"><table><thead><tr>';
+            html += '<th>#</th><th>When</th><th>&Delta;°C</th><th>Duration</th>';
+            html += '</tr></thead><tbody>';
+
+            // Show newest events first
+            const reversed = [...events].reverse();
+            for (const ev of reversed) {
+                const barW = Math.max(2, (ev.durationSec / maxDur) * 60);
+                const sev = eventSeverity(ev);
+                const barColor = severityColor(sev, 0.7);
+                html += `<tr>
+      <td>${ev.index}</td>
+      <td class="time-cell">${formatDate(ev.startTime)} ${formatTime(ev.startTime)}</td>
+      <td class="drop-cell">${formatC(ev.drop)}&deg;</td>
+      <td class="duration-cell">
+        <div class="bar-wrap">
+          <div class="bar" style="width:${barW}px;background:${barColor};opacity:1"></div>
+          <span class="dur-text ${durClass(ev.durationSec)}">${formatDuration(ev.durationSec)}</span>
+        </div>
+      </td>
+    </tr>`;
+            }
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        // Compute a 0-1 severity score based on fixed duration thresholds:
+        //   0–5 min   → green  (0.0)
+        //   5–15 min  → yellow (0.5)
+        //  15+ min    → red    (1.0)
+        // Interpolates smoothly within each band.
+        function eventSeverity(ev) {
+            const min = ev.durationSec / 60;
+            if (min <= 5) return (min / 5) * 0.33;                   // 0 → 0.33 (green range)
+            if (min <= 15) return 0.33 + ((min - 5) / 10) * 0.34;    // 0.33 → 0.67 (yellow range)
+            return Math.min(1, 0.67 + ((min - 15) / 15) * 0.33);     // 0.67 → 1.0 (red range)
+        }
+
+        // Interpolate green -> yellow -> red based on severity 0-1
+        function severityColor(t, alpha) {
+            // green (34,197,94) -> yellow (234,179,8) -> red (239,68,68)
+            let r, g, b;
+            if (t < 0.5) {
+                const s = t * 2; // 0-1 within first half
+                r = Math.round(34 + (234 - 34) * s);
+                g = Math.round(197 + (179 - 197) * s);
+                b = Math.round(94 + (8 - 94) * s);
+            } else {
+                const s = (t - 0.5) * 2; // 0-1 within second half
+                r = Math.round(234 + (239 - 234) * s);
+                g = Math.round(179 + (68 - 179) * s);
+                b = Math.round(8 + (68 - 8) * s);
+            }
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+
+        function renderChart(inputData, events, gapMs = null) {
+            const canvas = document.getElementById('chart-canvas');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            const fullW = rect.width;
+            const H = rect.height;
+
+            ctx.clearRect(0, 0, fullW, H);
+            if (inputData.length === 0) return;
+
+            // Dynamic smoothing based on time range
+            let windowSize = 10;
+            if (currentRangeHours === 0) {
+                const totalHours = (inputData[inputData.length - 1].ts - inputData[0].ts) / 3600000;
+                if (totalHours > 48) windowSize = 40;
+                else if (totalHours > 24) windowSize = 30;
+                else windowSize = 20;
+            } else {
+                if (currentRangeHours > 24) windowSize = 30;
+                else if (currentRangeHours > 6) windowSize = 15;
+            }
+
+            // Double buffering for smoother "Gaussian-like" look (two passes of box blur)
+            let t1s = smoothArray(inputData.map(d => d.t1), windowSize);
+            t1s = smoothArray(t1s, windowSize);
+
+            let t2s = smoothArray(inputData.map(d => d.t2), windowSize);
+            t2s = smoothArray(t2s, windowSize);
+            const data = inputData.map((d, i) => ({
+                ts: d.ts,
+                t1: t1s[i],
+                t2: t2s[i]
+            }));
+
+            // Chart margins for Y-axis and X-axis labels
+            const LEFT = 42;
+            const BOTTOM = 16;
+            const TOP = 4;
+            const W = fullW - LEFT;
+            const plotH = H - BOTTOM - TOP;
+
+            // Find temp range across both sensors
+            let minT = Infinity, maxT = -Infinity;
+            for (const d of data) {
+                if (d.t1 < minT) minT = d.t1;
+                if (d.t1 > maxT) maxT = d.t1;
+                if (d.t2 < minT) minT = d.t2;
+                if (d.t2 > maxT) maxT = d.t2;
+            }
+
+            // Ensure we have at least 2 degrees of range so the chart isn't too zoomed in on noise
+            if (maxT - minT < 2.0) {
+                const mid = (maxT + minT) / 2;
+                minT = mid - 1.0;
+                maxT = mid + 1.0;
+            }
+            // Round to nice values for Y-axis ticks
+            const rawRange = maxT - minT;
+            let tickStep;
+            if (rawRange <= 1) tickStep = 0.25;
+            else if (rawRange <= 3) tickStep = 0.5;
+            else if (rawRange <= 8) tickStep = 1;
+            else tickStep = 2;
+
+            minT = Math.floor(minT / tickStep) * tickStep;
+            maxT = Math.ceil(maxT / tickStep) * tickStep;
+            // Ensure at least some range
+            if (maxT - minT < tickStep) maxT = minT + tickStep;
+
+            const timeStart = data[0].ts.getTime();
+            const timeEnd = data[data.length - 1].ts.getTime();
+            const timeRange = timeEnd - timeStart;
+            if (timeRange === 0) return;
+            chartViewport = { left: LEFT, top: TOP, width: W, height: plotH, timeStart, timeEnd };
+
+            function xPos(ts) { return LEFT + ((ts.getTime() - timeStart) / timeRange) * W; }
+            function yPos(temp) { return TOP + plotH - ((temp - minT) / (maxT - minT)) * plotH; }
+
+            // Draw Y-axis gridlines and labels
+            ctx.font = '10px JetBrains Mono, monospace';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let t = minT; t <= maxT + 0.001; t += tickStep) {
+                const py = yPos(t);
+                // Gridline
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim();
+                ctx.lineWidth = 0.7;
+                ctx.beginPath();
+                ctx.moveTo(LEFT, py);
+                ctx.lineTo(fullW, py);
+                ctx.stroke();
+                // Label
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim();
+                ctx.fillText(t.toFixed(tickStep < 1 ? 1 : 0) + '°', LEFT - 4, py);
+            }
+
+            // Draw water flow regions with green-to-red severity shading
+            for (const ev of events) {
+                const x1 = xPos(ev.startTime);
+                const x2 = xPos(ev.endTime);
+                const w = Math.max(x2 - x1, 4);
+                const sev = eventSeverity(ev);
+
+                // Background fill
+                ctx.fillStyle = severityColor(sev, 0.18);
+                ctx.fillRect(x1, TOP, w, plotH);
+
+                // Left edge accent
+                ctx.fillStyle = severityColor(sev, 0.6);
+                ctx.fillRect(x1, TOP, 1.5, plotH);
+
+                // Top accent bar
+                ctx.fillStyle = severityColor(sev, 0.45);
+                ctx.fillRect(x1, TOP, w, 3);
+            }
+
+            // Clip the plot area for the temperature line
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(LEFT, TOP, W, plotH);
+            ctx.clip();
+
+            // Draw ambient temp line (Sensor1 / t1) — faint red
+            ctx.beginPath();
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--chart-ambient').trim();
+            ctx.lineWidth = 1;
+            const gMs = gapMs ?? inferGapThresholdMs(data);
+            let started = false;
+            for (let i = 0; i < data.length; i++) {
+                const px = xPos(data[i].ts);
+                const py = yPos(data[i].t1);
+                if (i > 0 && (data[i].ts.getTime() - data[i - 1].ts.getTime() > gMs)) started = false;
+                if (!started) { ctx.moveTo(px, py); started = true; }
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+
+            // Draw pipe temp line (Sensor2 / t2) — blue
+            ctx.beginPath();
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--chart-pipe').trim();
+            ctx.lineWidth = 1.5;
+            started = false;
+            for (let i = 0; i < data.length; i++) {
+                const px = xPos(data[i].ts);
+                const py = yPos(data[i].t2);
+                if (i > 0 && (data[i].ts.getTime() - data[i - 1].ts.getTime() > gMs)) started = false;
+                if (!started) { ctx.moveTo(px, py); started = true; }
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            ctx.restore();
+
+            // Drag-zoom selection overlay
+            if (dragZoom) {
+                const x1 = Math.max(LEFT, Math.min(LEFT + W, Math.min(dragZoom.startX, dragZoom.currentX)));
+                const x2 = Math.max(LEFT, Math.min(LEFT + W, Math.max(dragZoom.startX, dragZoom.currentX)));
+                const wSel = Math.max(0, x2 - x1);
+                if (wSel > 0) {
+                    ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+                    ctx.fillRect(x1, TOP, wSel, plotH);
+                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x1 + 0.5, TOP + 0.5, Math.max(1, wSel - 1), Math.max(1, plotH - 1));
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // Time axis labels
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim();
+            ctx.font = '10px JetBrains Mono, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const totalHours = timeRange / 3600000;
+
+            // Decide whether labels include a date prefix
+            const showDate = totalHours > 48;
+            // Measure a representative label to get its pixel width
+            const sampleLabel = showDate ? 'Feb 00 00:00' : '00:00';
+            const labelW = ctx.measureText(sampleLabel).width;
+            const minGap = labelW + 16; // minimum px between label centers
+
+            // Pick the coarsest "nice" hour step that avoids overlap
+            const niceSteps = [1, 2, 3, 6, 12, 24, 48, 72, 168];
+            let hourStep = niceSteps[niceSteps.length - 1];
+            for (const s of niceSteps) {
+                const pxPerStep = (s / totalHours) * W;
+                if (pxPerStep >= minGap) { hourStep = s; break; }
+            }
+
+            // For multi-day steps, only show date (drop time) to shorten labels
+            const showTimeInLabel = hourStep < 24;
+
+            const firstHour = new Date(data[0].ts);
+            firstHour.setMinutes(0, 0, 0);
+            firstHour.setHours(Math.ceil(firstHour.getHours() / hourStep) * hourStep);
+            let lastLabelX = -Infinity;
+            for (let t = firstHour.getTime(); t < timeEnd; t += hourStep * 3600000) {
+                const d = new Date(t);
+                const px = xPos(d);
+                if (px > LEFT + 20 && px < fullW - 20 && (px - lastLabelX) >= minGap) {
+                    let label;
+                    if (showDate && showTimeInLabel) {
+                        label = d.toLocaleDateString('en-US', { timeZone: displayTZ, month: 'short', day: 'numeric' }) + ' ' +
+                            d.toLocaleTimeString('en-US', { timeZone: displayTZ, hour: '2-digit', minute: '2-digit', hour12: false });
+                    } else if (showDate) {
+                        label = d.toLocaleDateString('en-US', { timeZone: displayTZ, month: 'short', day: 'numeric' });
+                    } else {
+                        label = d.toLocaleTimeString('en-US', { timeZone: displayTZ, hour: '2-digit', minute: '2-digit', hour12: false });
+                    }
+                    ctx.fillText(label, px, TOP + plotH + 3);
+                    lastLabelX = px;
+                }
+            }
+
+            // Y-axis line
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--chart-axis').trim();
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(LEFT, TOP);
+            ctx.lineTo(LEFT, TOP + plotH);
+            ctx.stroke();
+        }
+
+        function chartXFromPointer(e) {
+            const canvas = document.getElementById('chart-canvas');
+            const rect = canvas.getBoundingClientRect();
+            return e.clientX - rect.left;
+        }
+
+        function xToTimeMs(x) {
+            if (!chartViewport) return null;
+            const clamped = Math.max(chartViewport.left, Math.min(chartViewport.left + chartViewport.width, x));
+            const ratio = (clamped - chartViewport.left) / chartViewport.width;
+            return chartViewport.timeStart + ratio * (chartViewport.timeEnd - chartViewport.timeStart);
+        }
+
+        function updateZoomButton() {
+            const btn = document.getElementById('zoom-reset-btn');
+            if (!btn) return;
+            btn.classList.toggle('hidden', !zoomRangeMs);
+        }
+
+        function beginDragZoom(e) {
+            if (!chartViewport || filteredData.length < 2) return;
+            const x = chartXFromPointer(e);
+            if (x < chartViewport.left || x > chartViewport.left + chartViewport.width) return;
+
+            const canvas = document.getElementById('chart-canvas');
+            dragZoom = { pointerId: e.pointerId, startX: x, currentX: x };
+            canvas.classList.add('zooming');
+            canvas.setPointerCapture(e.pointerId);
+            renderChart(filteredData, currentEvents, currentGapMs);
+        }
+
+        function moveDragZoom(e) {
+            if (!dragZoom || dragZoom.pointerId !== e.pointerId) return;
+            dragZoom.currentX = chartXFromPointer(e);
+            renderChart(filteredData, currentEvents, currentGapMs);
+        }
+
+        function endDragZoom(e) {
+            if (!dragZoom || dragZoom.pointerId !== e.pointerId) return;
+            const canvas = document.getElementById('chart-canvas');
+            const startX = dragZoom.startX;
+            const endX = dragZoom.currentX;
+            const selWidth = Math.abs(endX - startX);
+
+            dragZoom = null;
+            canvas.classList.remove('zooming');
+            if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+
+            if (selWidth >= 10) {
+                const t1 = xToTimeMs(startX);
+                const t2 = xToTimeMs(endX);
+                if (t1 !== null && t2 !== null && Math.abs(t2 - t1) >= 1000) {
+                    zoomRangeMs = { startMs: Math.min(t1, t2), endMs: Math.max(t1, t2) };
+                    update();
+                    saveSettings();
+                    return;
+                }
+            }
+            renderChart(filteredData, currentEvents, currentGapMs);
+        }
+
+        function clearZoomAndRefresh() {
+            if (!zoomRangeMs) return;
+            zoomRangeMs = null;
+            update();
+            saveSettings();
+        }
+
+        function filterByRange(data, hours) {
+            if (hours === 0 || data.length === 0) return data;
+            const cutoff = new Date(data[data.length - 1].ts.getTime() - hours * 3600000);
+            return data.filter(d => d.ts >= cutoff);
+        }
+
+        function update() {
+            const minDrop = parseFloat(document.getElementById('drop-slider').value);
+            const mergeGap = parseInt(document.getElementById('merge-slider').value);
+
+            document.getElementById('drop-value').textContent = `${formatC(minDrop)}°C`;
+            const mergeMin = Math.floor(mergeGap / 60);
+            const mergeSec = mergeGap % 60;
+            document.getElementById('merge-value').textContent = mergeMin > 0
+                ? (mergeSec > 0 ? `${mergeMin}m${mergeSec}s` : `${mergeMin}m`)
+                : `${mergeGap}s`;
+
+            const rangeData = filterByRange(rawData, currentRangeHours);
+            let displayData = rangeData;
+            if (zoomRangeMs) {
+                const zoomed = rangeData.filter(d => {
+                    const t = d.ts.getTime();
+                    return t >= zoomRangeMs.startMs && t <= zoomRangeMs.endMs;
+                });
+                if (zoomed.length >= 2) {
+                    displayData = zoomed;
+                } else {
+                    zoomRangeMs = null;
+                }
+            }
+            filteredData = displayData;
+            currentGapMs = inferGapThresholdMs(filteredData);
+
+            // Update date range display
+            if (filteredData.length > 0) {
+                const first = filteredData[0].ts;
+                const last = filteredData[filteredData.length - 1].ts;
+                document.getElementById('date-range').textContent =
+                    `${formatDate(first)} ${formatTime(first)} \u2013 ${formatDate(last)} ${formatTime(last)}`;
+            }
+
+            const statusGapMs = inferGapThresholdMs(rangeData);
+            const statusEvents = detectEvents(rangeData, minDrop, mergeGap, statusGapMs);
+            const events = filteredData === rangeData
+                ? statusEvents
+                : detectEvents(filteredData, minDrop, mergeGap, currentGapMs);
+            currentEvents = events;
+
+            renderStats(events, statusEvents);
+            renderTable(events);
+            renderChart(filteredData, events, currentGapMs);
+            updateZoomButton();
+
+            // Footer
+            document.getElementById('page-footer').textContent =
+                `${rawData.length.toLocaleString()} readings recorded`;
+        }
+
+        function updateLiveBadge() {
+            const badge = document.getElementById('live-badge');
+            const text = document.getElementById('live-text');
+            if (rawData.length === 0) {
+                badge.classList.remove('is-live');
+                text.textContent = '--';
+                return;
+            }
+            const lastTs = rawData[rawData.length - 1].ts.getTime();
+            const ageSec = (Date.now() - lastTs) / 1000;
+            if (ageSec < 60) {
+                badge.classList.add('is-live');
+                text.textContent = 'Live';
+            } else {
+                badge.classList.remove('is-live');
+                if (ageSec < 120) text.textContent = '1m ago';
+                else if (ageSec < 3600) text.textContent = `${Math.floor(ageSec / 60)}m ago`;
+                else text.textContent = 'Delayed';
+            }
+        }
+
+        async function refresh() {
+            const sinceMs = rawData.length > 0
+                ? (rawData[rawData.length - 1].ts.getTime() - REFRESH_BACKFILL_MS)
+                : null;
+            const newData = await fetchData({ sinceMs, suppressUiError: rawData.length > 0 });
+            if (newData.length > 0) {
+                rawData = rawData.length > 0 ? mergeSeriesByTs(rawData, newData) : newData;
+                saveCachedData(rawData);
+                update();
+            }
+            updateLiveBadge();
+            maybeBackfillOlderHistory();
+            maybeHardResyncFromServerStats();
+        }
+
+        const STORAGE_KEY = 'water-tracker-settings-v1';
+
+        function populateDaysRangeOptions() {
+            const sel = document.getElementById('days-range-select');
+            if (!sel) return;
+            if (sel.options.length > 0) return; // already populated
+
+            for (const d of DAY_RANGE_OPTIONS) {
+                const opt = document.createElement('option');
+                opt.value = String(d * 24);
+                opt.textContent = `${d}D`;
+                if (d === DEFAULT_DAY_RANGE_DAYS) opt.selected = true;
+                sel.appendChild(opt);
+            }
+        }
+
+        function nearestDayRangeHours(hours) {
+            const targetDays = Math.max(1, hours / 24);
+            let best = DAY_RANGE_OPTIONS[0];
+            for (const d of DAY_RANGE_OPTIONS) {
+                if (Math.abs(d - targetDays) < Math.abs(best - targetDays)) best = d;
+            }
+            return best * 24;
+        }
+
+        function syncRangeControls() {
+            const rangeBtns = document.querySelectorAll('#range-btns button[data-hours]');
+            rangeBtns.forEach(btn => btn.classList.remove('active'));
+
+            const daySel = document.getElementById('days-range-select');
+            if (daySel) daySel.classList.remove('active');
+
+            if (currentRangeHours === 3 || currentRangeHours === 24 || currentRangeHours === 0) {
+                const activeBtn = document.querySelector(`#range-btns button[data-hours="${currentRangeHours}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
+                return;
+            }
+
+            // Any non-3/6/All range is treated as day-dropdown mode.
+            const normalizedHours = nearestDayRangeHours(currentRangeHours);
+            currentRangeHours = normalizedHours;
+            if (daySel) {
+                daySel.value = String(normalizedHours);
+                daySel.classList.add('active');
+            }
+        }
+
+        function saveSettings() {
+            const daySel = document.getElementById('days-range-select');
+            const settings = {
+                displayTZ,
+                currentRangeHours,
+                algoPreset,
+                lastDayRange: daySel ? daySel.value : null,
+                minDrop: document.getElementById('drop-slider').value,
+                mergeGap: document.getElementById('merge-slider').value
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const s = JSON.parse(raw);
+
+                if (s.displayTZ) displayTZ = s.displayTZ;
+                if (s.currentRangeHours !== undefined) {
+                    const parsed = parseInt(s.currentRangeHours);
+                    currentRangeHours = isNaN(parsed) ? 24 : parsed;
+                }
+                if (s.algoPreset) algoPreset = s.algoPreset;
+                if (!['aggressive', 'balanced', 'conservative'].includes(algoPreset)) {
+                    algoPreset = 'aggressive';
+                }
+
+                const tzSel = document.getElementById('tz-select');
+                if (tzSel) tzSel.value = displayTZ;
+                const presetSel = document.getElementById('algo-preset');
+                if (presetSel) presetSel.value = algoPreset;
+                if (s.lastDayRange) {
+                    const daySel = document.getElementById('days-range-select');
+                    if (daySel) daySel.value = s.lastDayRange;
+                }
+                syncRangeControls();
+
+                if (s.minDrop) {
+                    const el = document.getElementById('drop-slider');
+                    if (el) el.value = s.minDrop;
+                }
+                if (s.mergeGap) {
+                    const el = document.getElementById('merge-slider');
+                    if (el) el.value = s.mergeGap;
+                }
+            } catch (e) {
+                console.warn('Failed to load settings', e);
+            }
+        }
+
+        async function init() {
+            // Theme initialization
+            const savedTheme = localStorage.getItem('theme');
+            const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+                document.documentElement.classList.add('dark');
+            }
+
+            populateDaysRangeOptions();
+            loadSettings();
+            rawData = loadCachedData();
+            if (rawData.length > 0) {
+                update();
+                updateLiveBadge();
+            }
+
+            // Incremental refresh from the newest cached point only (including "All").
+            const sinceMs = rawData.length > 0
+                ? (rawData[rawData.length - 1].ts.getTime() - REFRESH_BACKFILL_MS)
+                : null;
+            const fetched = await fetchData({ sinceMs, suppressUiError: rawData.length > 0 });
+            if (fetched.length > 0) {
+                rawData = rawData.length > 0 ? mergeSeriesByTs(rawData, fetched) : fetched;
+                saveCachedData(rawData);
+                update();
+            } else if (rawData.length === 0) {
+                update();
+            }
+            maybeBackfillOlderHistory();
+            maybeHardResyncFromServerStats(true);
+            updateLiveBadge();
+
+            // Auto-refresh every 15 seconds
+            setInterval(refresh, 15000);
+            // Update badge age text every 5 seconds
+            setInterval(updateLiveBadge, 5000);
+
+            const dropSlider = document.getElementById('drop-slider');
+            const mergeSlider = document.getElementById('merge-slider');
+            const presetSelect = document.getElementById('algo-preset');
+            const daysRangeSelect = document.getElementById('days-range-select');
+            const chartCanvas = document.getElementById('chart-canvas');
+            const zoomResetBtn = document.getElementById('zoom-reset-btn');
+
+            dropSlider.addEventListener('input', update);
+            mergeSlider.addEventListener('input', update);
+            presetSelect.addEventListener('change', (e) => {
+                algoPreset = e.target.value;
+                update();
+                saveSettings();
+            });
+
+            // Save on change (end of drag)
+            dropSlider.addEventListener('change', saveSettings);
+            mergeSlider.addEventListener('change', saveSettings);
+
+            // Timezone selector
+            document.getElementById('tz-select').addEventListener('change', (e) => {
+                displayTZ = e.target.value;
+                update();
+                saveSettings();
+            });
+
+            // Time range buttons
+            document.getElementById('range-btns').addEventListener('click', async (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                zoomRangeMs = null;
+                currentRangeHours = parseInt(btn.dataset.hours, 10);
+                syncRangeControls();
+                update();
+                saveSettings();
+                if (currentRangeHours === 0) {
+                    maybeBackfillOlderHistory();
+                }
+            });
+
+            daysRangeSelect.addEventListener('change', () => {
+                zoomRangeMs = null;
+                currentRangeHours = parseInt(daysRangeSelect.value, 10);
+                syncRangeControls();
+                update();
+                saveSettings();
+            });
+
+            // UX: first click on day control switches to the currently selected day range;
+            // second click (when already active) opens the dropdown options.
+            daysRangeSelect.addEventListener('pointerdown', (e) => {
+                const isDayMode = !(currentRangeHours === 3 || currentRangeHours === 24 || currentRangeHours === 0);
+                if (isDayMode) return;
+                e.preventDefault();
+                zoomRangeMs = null;
+                currentRangeHours = parseInt(daysRangeSelect.value, 10);
+                syncRangeControls();
+                update();
+                saveSettings();
+            });
+
+            zoomResetBtn.addEventListener('click', clearZoomAndRefresh);
+            chartCanvas.addEventListener('dblclick', clearZoomAndRefresh);
+            chartCanvas.addEventListener('pointerdown', beginDragZoom);
+            chartCanvas.addEventListener('pointermove', moveDragZoom);
+            chartCanvas.addEventListener('pointerup', endDragZoom);
+            chartCanvas.addEventListener('pointercancel', endDragZoom);
+            chartCanvas.addEventListener('pointerleave', (e) => {
+                if (dragZoom && dragZoom.pointerId === e.pointerId) endDragZoom(e);
+            });
+
+            document.getElementById('theme-toggle').addEventListener('click', () => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                if (filteredData.length > 0) {
+                    renderChart(filteredData, currentEvents, currentGapMs);
+                }
+            });
+
+            updateZoomButton();
+
+            window.addEventListener('resize', () => {
+                if (filteredData.length > 0) {
+                    renderChart(filteredData, currentEvents, currentGapMs);
+                }
+            });
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
